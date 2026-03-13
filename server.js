@@ -1,47 +1,86 @@
-import express from "express";
-import dotenv from "dotenv";
-import cookieParser from "cookie-parser";
-import path from "path";
+require('dotenv').config();
 
-import authRoutes from "./routes/auth.route.js";
-import productRoutes from "./routes/product.route.js";
-import cartRoutes from "./routes/cart.route.js";
-import couponRoutes from "./routes/coupon.route.js";
-import paymentRoutes from "./routes/payment.route.js";
-import analyticsRoutes from "./routes/analytics.route.js";
-import orderRoutes from "./routes/order.route.js";
-import categoryRoutes from "./routes/category.route.js";
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 
-import { connectDB } from "./lib/db.js";
-
-dotenv.config();
+const projectRoutes = require('./routes/projects');
+const skillRoutes = require('./routes/skills');
+const contactRoutes = require('./routes/contact');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-const __dirname = path.resolve();
+app.set('trust proxy', 1);
 
-app.use(express.json({ limit: "10mb" })); // allows you to parse the body of the request
-app.use(cookieParser());
+const PORT = process.env.PORT || 10000;
 
-app.use("/api/auth", authRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/coupons", couponRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/categories", categoryRoutes);
+// Security
+app.use(helmet());
+app.use(morgan('dev'));
 
-if (process.env.NODE_ENV === "production") {
-	app.use(express.static(path.join(__dirname, "/frontend/dist")));
+// Rate Limit
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+});
 
-	app.get("*", (req, res) => {
-		res.sendFile(path.resolve(__dirname, "frontend", "dist", "index.html"));
-	});
-}
+app.use('/api', limiter);
 
-app.listen(PORT, () => {
-	console.log("Server is running on http://localhost:" + PORT);
-	connectDB();
+// CORS
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://e-commerce-store-frontend-smoky.vercel.app'
+  ],
+  methods: ['GET','POST','PUT','DELETE'],
+  credentials: true
+}));
+
+// Body Parser
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Database
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log('MongoDB connected'))
+.catch(err => console.log(err));
+
+// Routes
+app.use('/api/projects', projectRoutes);
+app.use('/api/skills', skillRoutes);
+app.use('/api/contact', contactRoutes);
+
+// Health check
+app.get('/api/health', (req,res)=>{
+  res.json({
+    status:"OK",
+    server:"running"
+  });
+});
+
+// Root
+app.get('/',(req,res)=>{
+  res.send('API running');
+});
+
+// 404
+app.use((req,res)=>{
+  res.status(404).json({
+    error:"Route not found"
+  });
+});
+
+// Error handler
+app.use((err,req,res,next)=>{
+  console.error(err);
+  res.status(500).json({
+    error:"Server error"
+  });
+});
+
+app.listen(PORT,()=>{
+  console.log(`Server running on port ${PORT}`);
 });
