@@ -18,17 +18,19 @@ const storeRefreshToken = async (userId, refreshToken) => {
 	await redis.set(`refresh_token:${userId}`, refreshToken, "EX", 7 * 24 * 60 * 60); // 7days
 };
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const setCookies = (res, accessToken, refreshToken) => {
 	res.cookie("accessToken", accessToken, {
-		httpOnly: true, // prevent XSS attacks, cross site scripting attack
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+		httpOnly: true,
+		secure: isProduction,
+		sameSite: isProduction ? "none" : "strict", // "none" required for cross-origin (Vercel + Render)
 		maxAge: 15 * 60 * 1000, // 15 minutes
 	});
 	res.cookie("refreshToken", refreshToken, {
-		httpOnly: true, // prevent XSS attacks, cross site scripting attack
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+		httpOnly: true,
+		secure: isProduction,
+		sameSite: isProduction ? "none" : "strict",
 		maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 	});
 };
@@ -43,7 +45,6 @@ export const signup = async (req, res) => {
 		}
 		const user = await User.create({ name, email, password });
 
-		// authenticate
 		const { accessToken, refreshToken } = generateTokens(user._id);
 		await storeRefreshToken(user._id, refreshToken);
 
@@ -94,8 +95,8 @@ export const logout = async (req, res) => {
 			await redis.del(`refresh_token:${decoded.userId}`);
 		}
 
-		res.clearCookie("accessToken");
-		res.clearCookie("refreshToken");
+		res.clearCookie("accessToken", { sameSite: isProduction ? "none" : "strict", secure: isProduction });
+		res.clearCookie("refreshToken", { sameSite: isProduction ? "none" : "strict", secure: isProduction });
 		res.json({ message: "Logged out successfully" });
 	} catch (error) {
 		console.log("Error in logout controller", error.message);
@@ -103,7 +104,6 @@ export const logout = async (req, res) => {
 	}
 };
 
-// this will refresh the access token
 export const refreshToken = async (req, res) => {
 	try {
 		const refreshToken = req.cookies.refreshToken;
@@ -123,8 +123,8 @@ export const refreshToken = async (req, res) => {
 
 		res.cookie("accessToken", accessToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
+			secure: isProduction,
+			sameSite: isProduction ? "none" : "strict",
 			maxAge: 15 * 60 * 1000,
 		});
 
