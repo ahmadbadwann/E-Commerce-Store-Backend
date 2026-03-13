@@ -3,7 +3,11 @@ import User from "../models/user.model.js";
 
 export const protectRoute = async (req, res, next) => {
 	try {
-		const accessToken = req.cookies.accessToken;
+		// Support both Authorization header (mobile/cross-origin) and cookies (same-origin)
+		let accessToken =
+			req.headers.authorization?.startsWith("Bearer ")
+				? req.headers.authorization.split(" ")[1]
+				: req.cookies?.accessToken;
 
 		if (!accessToken) {
 			return res.status(401).json({ message: "Unauthorized - No access token provided" });
@@ -18,7 +22,6 @@ export const protectRoute = async (req, res, next) => {
 			}
 
 			req.user = user;
-
 			next();
 		} catch (error) {
 			if (error.name === "TokenExpiredError") {
