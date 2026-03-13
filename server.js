@@ -42,16 +42,20 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   process.env.CLIENT_URL,
-].filter(Boolean); // remove undefined/empty values
+].filter(Boolean);
+
+// Matches ALL Vercel preview URLs for this project
+const vercelPreviewPattern = /^https:\/\/e-commerce-store-frontend[a-z0-9-]*\.vercel\.app$/;
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
+      // Allow requests with no origin (Postman, curl, mobile)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+      // Allow exact origins (localhost + production)
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Allow all Vercel preview deployments
+      if (vercelPreviewPattern.test(origin)) return callback(null, true);
       console.log("Blocked by CORS:", origin);
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
